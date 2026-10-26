@@ -17,6 +17,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -27,7 +29,9 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -60,6 +64,10 @@ fun AccountsScreen(
     LaunchedEffect(Unit) { viewModel.onEnter() }
 
     val groups = remember(state.accounts) { groupAccounts(state.accounts) }
+
+    // 分类折叠：默认折叠（可在「我的 → 账户页折叠账户分类」关闭），点击分类标题展开该分类下的账户
+    val collapseCategories = Graph.store.collapseAccountCategories
+    var expandedGroups by remember { mutableStateOf(emptySet<String>()) }
 
     // 仅用一级账户汇总，避免父子账户重复计入
     val totalAsset = state.accounts
@@ -153,21 +161,34 @@ fun AccountsScreen(
                     contentPadding = PaddingValues(top = 8.dp, bottom = 96.dp)
                 ) {
                     groups.forEach { group ->
+                        val expanded = !collapseCategories || group.title in expandedGroups
                         item(key = "header-${group.title}") {
                             SectionHeaderRow(
                                 title = group.title,
                                 total = group.total,
                                 currency = currency,
-                                liability = group.liability
+                                liability = group.liability,
+                                collapsible = collapseCategories,
+                                expanded = expanded,
+                                onToggle = {
+                                    expandedGroups = if (group.title in expandedGroups) {
+                                        expandedGroups - group.title
+                                    } else {
+                                        expandedGroups + group.title
+                                    }
+                                }
                             )
                         }
-                        items(group.rows, key = { it.id }) { account ->
-                            AccountRow(
-                                account = account,
-                                liability = group.liability,
-                                fallbackCurrency = currency,
-                                onClick = { onOpenAccount(account) }
-                            )
+                        // 分类折叠时隐藏该分类下的账户，展开后按「一级账户 → 子账户」顺序显示
+                        if (expanded) {
+                            items(group.rows, key = { it.id }) { account ->
+                                AccountRow(
+                                    account = account,
+                                    liability = group.liability,
+                                    fallbackCurrency = currency,
+                                    onClick = { onOpenAccount(account) }
+                                )
+                            }
                         }
                     }
                 }
@@ -210,15 +231,42 @@ private fun SectionHeaderRow(
     title: String,
     total: Long,
     currency: String,
-    liability: Boolean
+    liability: Boolean,
+    collapsible: Boolean = false,
+    expanded: Boolean = false,
+    onToggle: () -> Unit = {}
 ) {
     val colors = LocalLedgerColors.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 4.dp),
+            .then(
+                if (collapsible) {
+                    Modifier.clickable(onClick = onToggle)
+                } else {
+                    Modifier
+                }
+            )
+            .padding(
+                start = if (collapsible) 2.dp else 20.dp,
+                end = 20.dp,
+                top = 18.dp,
+                bottom = 4.dp
+            ),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (collapsible) {
+            Icon(
+                imageVector = if (expanded) {
+                    Icons.Filled.KeyboardArrowDown
+                } else {
+                    Icons.Filled.KeyboardArrowRight
+                },
+                contentDescription = if (expanded) "收起该分类账户" else "展开该分类账户",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
         Text(
             text = title,
             style = MaterialTheme.typography.labelLarge,

@@ -40,6 +40,13 @@ class SessionStore(context: Context) {
             prefs.edit().putString(KEY_USER, text).apply()
         }
 
+    /** 账户页是否把账户折叠到所属分类（储蓄账户、信用卡等）下（默认折叠） */
+    var collapseAccountCategories: Boolean
+        get() = prefs.getBoolean(KEY_COLLAPSE_SUB_ACCOUNTS, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_COLLAPSE_SUB_ACCOUNTS, value).apply()
+        }
+
     /** 上一次记账使用的账户，用于下次记账默认选中 */
     var lastAccountId: String?
         get() = prefs.getString(KEY_LAST_ACCOUNT, null)
@@ -115,6 +122,7 @@ class SessionStore(context: Context) {
         private const val KEY_USER = "user"
         private const val KEY_REFRESHED_AT = "token_refreshed_at"
         private const val KEY_LAST_ACCOUNT = "last_account_id"
+        private const val KEY_COLLAPSE_SUB_ACCOUNTS = "collapse_sub_accounts"
 
         /**
          * 归一化服务器地址：

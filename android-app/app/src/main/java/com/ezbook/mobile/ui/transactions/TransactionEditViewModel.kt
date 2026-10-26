@@ -230,13 +230,12 @@ class TransactionEditViewModel : ViewModel() {
     }
 
     fun setAmount(text: String) {
-        val allowNegative = _state.value.type == TX_TYPE_BALANCE
-        val filtered = sanitizeAmountInput(text, allowNegative)
+        val filtered = sanitizeAmountInput(text)
         _state.update { it.copy(amountText = filtered, error = null) }
     }
 
     fun setDestinationAmount(text: String) {
-        val filtered = sanitizeAmountInput(text, false)
+        val filtered = sanitizeAmountInput(text)
         _state.update { it.copy(destinationAmountText = filtered, error = null) }
     }
 
@@ -369,12 +368,12 @@ class TransactionEditViewModel : ViewModel() {
         const val MAX_AMOUNT_LENGTH = 40
     }
 
-    /** 允许输入数字与四则运算符，由 AmountCalculator 负责求值 */
-    private fun sanitizeAmountInput(text: String, allowNegative: Boolean): String {
-        var result = text.filter { ALLOWED_AMOUNT_CHARS.contains(it) }
-        if (!allowNegative) {
-            result = result.replace("-", "")
-        }
-        return result.take(MAX_AMOUNT_LENGTH)
-    }
+    /**
+     * 允许输入数字与四则运算符，由 AmountCalculator 负责求值。
+     *
+     * 注意：不能过滤掉 "-"，它既是减号运算符也是负号，过滤会导致计算器里
+     * 减号无法输入、且 "10-3" 被拼成 "103"；金额正负在 save() 中统一校验。
+     */
+    private fun sanitizeAmountInput(text: String): String =
+        text.filter { ALLOWED_AMOUNT_CHARS.contains(it) }.take(MAX_AMOUNT_LENGTH)
 }

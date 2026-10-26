@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -74,7 +75,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -86,6 +89,7 @@ import com.ezbook.mobile.data.model.TX_TYPE_EXPENSE
 import com.ezbook.mobile.data.model.TX_TYPE_INCOME
 import com.ezbook.mobile.data.model.TX_TYPE_TRANSFER
 import com.ezbook.mobile.data.model.Tag
+import com.ezbook.mobile.Graph
 import com.ezbook.mobile.ui.components.LedgerIconBadge
 import com.ezbook.mobile.ui.components.LedgerIconKind
 import com.ezbook.mobile.ui.components.LoadingBox
@@ -674,12 +678,15 @@ private fun CalculatorSheet(
     val symbol = Fmt.currencySymbol(currency)
     val preview = remember(value) { AmountCalculator.evaluate(value) }
 
+    // 表达式校验提示：未按 = 直接完成、或 = 无法计算时显示
+    var hint by remember { mutableStateOf<String?>(null) }
+
     val keys = listOf(
-        listOf("⌫", "(", ")", "÷"),
-        listOf("7", "8", "9", "×"),
-        listOf("4", "5", "6", "-"),
-        listOf("1", "2", "3", "+"),
-        listOf("0", ".", "=", "完成")
+        listOf("C", "⌫", "(", ")"),
+        listOf("7", "8", "9", "÷"),
+        listOf("4", "5", "6", "×"),
+        listOf("1", "2", "3", "-"),
+        listOf("0", ".", "=", "+")
     )
 
     Column(
@@ -699,15 +706,28 @@ private fun CalculatorSheet(
             color = MaterialTheme.colorScheme.surfaceContainer
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                Text(
-                    text = if (value.isBlank()) "0" else value,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = if (value.isBlank()) "0" else value,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    hint?.let { text ->
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = text,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                    }
+                }
                 Spacer(Modifier.height(6.dp))
                 Text(
                     text = if (preview != null) {
@@ -735,16 +755,20 @@ private fun CalculatorSheet(
                         key = key,
                         modifier = Modifier.weight(1f),
                         onClick = {
+                            hint = null
                             when (key) {
+                                "C" -> onValueChange("")
                                 "⌫" -> onValueChange(value.dropLast(1))
                                 "=" -> {
+                                    // 校验公式正确性：无法计算时提示，等待用户修正
                                     val result = AmountCalculator.evaluate(value)
                                     if (result != null) {
                                         onValueChange(Fmt.moneyPlain(result))
+                                    } else {
+                                        hint = "计算公式有误，请检查"
                                     }
                                 }
 
-                                "完成" -> onDone()
                                 else -> onValueChange(value + key)
                             }
                         }
@@ -752,6 +776,20 @@ private fun CalculatorSheet(
                 }
             }
         }
+
+        Spacer(Modifier.height(8.dp))
+
+        KeypadButton(
+            key = "完成",
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                if (value.any { it in "+-*/×÷()" }) {
+                    hint = "请先点击 = 键完成计算"
+                } else {
+                    onDone()
+                }
+            }
+        )
 
         Spacer(Modifier.height(24.dp))
     }
@@ -764,7 +802,8 @@ private fun KeypadButton(
     onClick: () -> Unit
 ) {
     val isPrimary = key == "完成"
-    val isOperator = key in listOf("÷", "×", "-", "+", "(", ")", "=")
+    // 运算符与 C（一键清空）使用同一套样式
+    val isOperator = key in listOf("÷", "×", "-", "+", "(", ")", "=", "C")
 
     Surface(
         modifier = modifier
@@ -956,7 +995,8 @@ private fun CategoryOption(
 }
 
 /**
- * 账户选择：按账户分类分组（一级/二级层级），并支持按名称模糊搜索
+ * 账户选择：左右结构——左侧为账户分类（储蓄账户、信用卡等），右侧为该分类下的账户
+ * （子账户缩进显示）；支持按名称模糊搜索，点击账户即选中
  */
 @Composable
 private fun AccountSheet(
@@ -966,9 +1006,30 @@ private fun AccountSheet(
     disabledId: String?,
     onSelect: (String) -> Unit
 ) {
-    val colors = LocalLedgerColors.current
     var keyword by remember { mutableStateOf("") }
     val groups = remember(accountTree, keyword) { groupAccounts(accountTree, keyword) }
+
+    // 分类合计金额使用的币种：优先取账户币种
+    val currency = accountTree.firstOrNull()?.currency
+        ?: Graph.store.user?.defaultCurrency
+        ?: "CNY"
+
+    // 默认定位到当前选中账户所在的分类
+    val selectedGroupTitle = remember(groups, selectedId) {
+        groups.firstOrNull { group -> group.rows.any { it.id == selectedId } }?.title
+    }
+
+    var activeGroupTitle by remember { mutableStateOf<String?>(null) }
+    val currentGroup = groups.firstOrNull { it.title == activeGroupTitle }
+        ?: groups.firstOrNull { it.title == selectedGroupTitle }
+        ?: groups.firstOrNull()
+
+    val accountListState = rememberLazyListState()
+    LaunchedEffect(currentGroup?.title) {
+        if (accountListState.layoutInfo.totalItemsCount > 0) {
+            accountListState.scrollToItem(0)
+        }
+    }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -1015,76 +1076,207 @@ private fun AccountSheet(
             return@Column
         }
 
-        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp)) {
-            groups.forEach { group ->
-                item(key = "h-${group.title}") {
-                    Text(
-                        text = group.title,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 20.dp, top = 14.dp, bottom = 4.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, bottom = 2.dp)
+        ) {
+            Text(
+                text = "账户分类",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = currentGroup?.title ?: "账户",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // 固定高度：左右两栏各展示 5 行，超出部分上下滚动
+        Row(modifier = Modifier.fillMaxWidth().height(PickerRowHeight * PickerVisibleRows)) {
+            // 左栏：账户分类（储蓄账户、信用卡等），点击切换右栏内容
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                items(groups, key = { "group-${it.title}" }) { group ->
+                    CategoryPickRow(
+                        title = group.title,
+                        total = group.total,
+                        currency = currency,
+                        liability = group.liability,
+                        active = group.title == currentGroup?.title,
+                        onClick = { activeGroupTitle = group.title }
                     )
                 }
-                items(group.rows, key = { it.id }) { account ->
-                    val disabled = account.id == disabledId
-                    val indent = account.parentId != "0"
-                    val balance = Fmt.stringToCents(account.balance)
+            }
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(enabled = !disabled) { onSelect(account.id) }
-                            .padding(
-                                start = if (indent) 44.dp else 20.dp,
-                                end = 20.dp,
-                                top = 10.dp,
-                                bottom = 10.dp
-                            ),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        LedgerIconBadge(
-                            iconId = account.icon,
-                            kind = LedgerIconKind.ACCOUNT,
-                            color = ledgerColorOf(
-                                account.color,
-                                if (group.liability) colors.expense else MaterialTheme.colorScheme.primary
-                            ),
-                            fallbackText = account.name,
-                            size = if (indent) 28 else 34
+            // 右栏：该分类下的账户，子账户缩进显示
+            LazyColumn(modifier = Modifier.weight(1f), state = accountListState) {
+                currentGroup?.let { group ->
+                    items(group.rows, key = { "account-${it.id}" }) { account ->
+                        val isChild = account.parentId != "0"
+                        AccountPickRow(
+                            account = account,
+                            liability = group.liability,
+                            selected = account.id == selectedId,
+                            disabled = account.id == disabledId,
+                            startPadding = if (isChild) 28.dp else 12.dp,
+                            endPadding = 20.dp,
+                            badgeSize = if (isChild) 26 else 34,
+                            onClick = { onSelect(account.id) }
                         )
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = account.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = if (disabled) {
-                                    MaterialTheme.colorScheme.outline
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                }
-                            )
-                            Text(
-                                text = Fmt.moneyWithSymbol(balance, account.currency),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (group.liability) {
-                                    colors.expense
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
-                        }
-                        if (account.id == selectedId) {
-                            Icon(
-                                Icons.Filled.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
                     }
                 }
             }
-            item { Spacer(Modifier.height(24.dp)) }
+        }
+    }
+}
+
+/** 账户选择左右两栏的行高，配合 [PickerVisibleRows] 固定弹窗高度 */
+private val PickerRowHeight = 60.dp
+
+/** 账户选择左右两栏可见行数，超出后滚动 */
+private const val PickerVisibleRows = 5
+
+/** 账户选择左栏：账户分类（储蓄账户、信用卡等）及其合计金额 */
+@Composable
+private fun CategoryPickRow(
+    title: String,
+    total: Long,
+    currency: String,
+    liability: Boolean,
+    active: Boolean,
+    onClick: () -> Unit
+) {
+    val colors = LocalLedgerColors.current
+    // 负债账户合计显示为负数
+    val displayTotal = if (liability) -kotlin.math.abs(total) else total
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (active) {
+                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+                } else {
+                    Color.Transparent
+                }
+            )
+            .clickable(onClick = onClick)
+            .height(PickerRowHeight)
+            .padding(start = 20.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (active) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = Fmt.moneyWithSymbol(displayTotal, currency),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (liability) {
+                    colors.expense
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Icon(
+            Icons.Filled.ChevronRight,
+            contentDescription = null,
+            tint = if (active) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outline
+            },
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+/** 账户选择中的账户行（左侧图标 + 名称 / 余额 + 选中标记） */
+@Composable
+private fun AccountPickRow(
+    account: Account,
+    liability: Boolean,
+    selected: Boolean,
+    disabled: Boolean,
+    onClick: () -> Unit,
+    startPadding: Dp = 20.dp,
+    endPadding: Dp = 20.dp,
+    badgeSize: Int = 34
+) {
+    val colors = LocalLedgerColors.current
+    val balance = Fmt.stringToCents(account.balance)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (selected) {
+                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+                } else {
+                    Color.Transparent
+                }
+            )
+            .clickable(enabled = !disabled, onClick = onClick)
+            .height(PickerRowHeight)
+            .padding(start = startPadding, end = endPadding),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        LedgerIconBadge(
+            iconId = account.icon,
+            kind = LedgerIconKind.ACCOUNT,
+            color = ledgerColorOf(
+                account.color,
+                if (liability) colors.expense else MaterialTheme.colorScheme.primary
+            ),
+            fallbackText = account.name,
+            size = badgeSize
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = account.name,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (disabled) {
+                    MaterialTheme.colorScheme.outline
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = Fmt.moneyWithSymbol(balance, account.currency),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (liability) {
+                    colors.expense
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (selected) {
+            Icon(
+                Icons.Filled.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }

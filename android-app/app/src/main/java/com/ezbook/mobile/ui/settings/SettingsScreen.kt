@@ -25,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,6 +61,7 @@ fun SettingsScreen(
 
     var serverVersion by remember { mutableStateOf<String?>(null) }
     var loggingOut by remember { mutableStateOf(false) }
+    var collapseAccountCategories by remember { mutableStateOf(Graph.store.collapseAccountCategories) }
 
     LaunchedEffect(Unit) {
         serverVersion = runCatching { Graph.api.serverVersion().version }.getOrNull()
@@ -190,6 +192,38 @@ fun SettingsScreen(
                     showExternal = true,
                     onClick = { openInBrowser() }
                 )
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            collapseAccountCategories = !collapseAccountCategories
+                            Graph.store.collapseAccountCategories = collapseAccountCategories
+                        }
+                        .padding(vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "账户页折叠账户分类",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = "开启后账户按分类折叠，点击分类标题展开其中的账户",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = collapseAccountCategories,
+                        onCheckedChange = { checked ->
+                            collapseAccountCategories = checked
+                            Graph.store.collapseAccountCategories = checked
+                        }
+                    )
+                }
             }
         }
 
