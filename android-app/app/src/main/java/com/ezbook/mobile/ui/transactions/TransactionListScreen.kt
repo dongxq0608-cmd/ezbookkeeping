@@ -61,6 +61,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -148,6 +149,8 @@ fun TransactionListScreen(
     var showCategorySheet by remember { mutableStateOf(false) }
     var showMonthPicker by remember { mutableStateOf(false) }
     val currency = Graph.store.user?.defaultCurrency?.takeIf { it.isNotBlank() } ?: "CNY"
+    // 左滑删除同一时间只允许一行展开
+    val swipeReveal = remember { SwipeRevealState() }
 
     LaunchedEffect(Unit) { viewModel.onEnter() }
 
@@ -293,7 +296,11 @@ fun TransactionListScreen(
                         }
                     } else {
                         items(dayItems, key = { it.id }) { transaction ->
-                            SwipeToDeleteRow(onDelete = { viewModel.deleteTransaction(transaction.id) }) {
+                            SwipeToDeleteRow(
+                                rowId = transaction.id,
+                                revealState = swipeReveal,
+                                onDelete = { viewModel.deleteTransaction(transaction.id) }
+                            ) {
                                 TransactionRow(
                                     transaction = transaction,
                                     accounts = state.accountsById,
@@ -391,6 +398,8 @@ fun TransactionListScreen(
                             }
                             items(group.items, key = { it.id }) { transaction ->
                                 SwipeToDeleteRow(
+                                    rowId = transaction.id,
+                                    revealState = swipeReveal,
                                     onDelete = { viewModel.deleteTransaction(transaction.id) }
                                 ) {
                                     TransactionRow(
@@ -722,12 +731,20 @@ private fun MonthDividerRow(month: YearMonth) {
 
 private val DELETE_ACTION_WIDTH = 88.dp
 
+/** 左滑删除的共享状态：同一时间只允许一行处于展开状态 */
+private class SwipeRevealState {
+    var openedId by mutableStateOf<String?>(null)
+}
+
 /**
  * 左滑露出右侧红色「删除」区域，点击后才真正删除。
- * 未滑开时不会响应点击，滑开后点内容区域则先收起。
+ * 未滑开时不会响应点击，滑开后点内容区域则先收起；
+ * 开始滑动某一行时，其它已展开的行会自动复位。
  */
 @Composable
 private fun SwipeToDeleteRow(
+    rowId: String,
+    revealState: SwipeRevealState,
     onDelete: () -> Unit,
     content: @Composable () -> Unit
 ) {
@@ -737,19 +754,41 @@ private fun SwipeToDeleteRow(
     val scope = rememberCoroutineScope()
     var revealed by remember { mutableStateOf(false) }
 
+    // 别的行开始滑动 / 展开时，本行自动收起
+    LaunchedEffect(revealState.openedId) {
+        if (revealState.openedId != rowId && (revealed || offsetX.value != 0f)) {
+            offsetX.animateTo(0f)
+            revealed = false
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .pointerInput(revealPx) {
+            .pointerInput(revealPx, rowId) {
                 detectHorizontalDragGestures(
+                    onDragStart = {
+                        // 抢占展开权，其它行随之收起
+                        if (revealState.openedId != rowId) {
+                            revealState.openedId = rowId
+                        }
+                    },
                     onDragEnd = {
                         val open = offsetX.value <= -revealPx / 2
                         scope.launch { offsetX.animateTo(if (open) -revealPx else 0f) }
                         revealed = open
+                        if (open) {
+                            revealState.openedId = rowId
+                        } else if (revealState.openedId == rowId) {
+                            revealState.openedId = null
+                        }
                     },
                     onDragCancel = {
                         scope.launch { offsetX.animateTo(0f) }
                         revealed = false
+                        if (revealState.openedId == rowId) {
+                            revealState.openedId = null
+                        }
                     }
                 ) { change, dragAmount ->
                     change.consume()
@@ -759,28 +798,45 @@ private fun SwipeToDeleteRow(
                 }
             }
     ) {
-        Row(
-            modifier = Modifier.matchParentSize(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(DELETE_ACTION_WIDTH)
-                    .fillMaxHeight()
-                    .background(colors.error)
-                    .clickable(enabled = revealed) {
-                        scope.launch { offsetX.snapTo(0f) }
-                        revealed = false
-                        onDelete()
-                    },
-                contentAlignment = Alignment.Center
+        // 只绘制被滑开露出的那一段：未滑动时完全不绘制，
+        // 否则半透明的毛玻璃行会把下方的红色「删除」透出来
+        val revealedPx = (-offsetX.value).coerceIn(0f, revealPx)
+        if (revealedPx > 0.5f) {
+            Row(
+                modifier = Modifier.matchParentSize(),
+                horizontalArrangement = Arrangement.End
             ) {
-                Text(
-                    text = "删除",
-                    color = colors.onError,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp
-                )
+                Box(
+                    modifier = Modifier
+                        .width(with(LocalDensity.current) { revealedPx.toDp() })
+                        .fillMaxHeight()
+                        .background(colors.error)
+                        .clipToBounds()
+                        .clickable(enabled = revealed) {
+                            scope.launch { offsetX.snapTo(0f) }
+                            revealed = false
+                            if (revealState.openedId == rowId) {
+                                revealState.openedId = null
+                            }
+                            onDelete()
+                        }
+                ) {
+                    // 文案固定在右侧，随滑开宽度被裁切
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .width(DELETE_ACTION_WIDTH)
+                            .fillMaxHeight(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "删除",
+                            color = colors.onError,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
             }
         }
 
@@ -804,6 +860,9 @@ private fun SwipeToDeleteRow(
                     ) {
                         scope.launch { offsetX.animateTo(0f) }
                         revealed = false
+                        if (revealState.openedId == rowId) {
+                            revealState.openedId = null
+                        }
                     }
             )
         }
