@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
 import com.ezbook.mobile.ui.AppRoot
+import com.ezbook.mobile.ui.theme.BackgroundBackdrop
 import com.ezbook.mobile.ui.theme.EzBookTheme
 import kotlinx.coroutines.launch
 
@@ -18,7 +19,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             EzBookTheme {
-                AppRoot()
+                BackgroundBackdrop {
+                    AppRoot()
+                }
             }
         }
     }
