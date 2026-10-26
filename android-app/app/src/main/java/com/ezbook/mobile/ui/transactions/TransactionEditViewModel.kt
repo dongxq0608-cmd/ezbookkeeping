@@ -189,14 +189,16 @@ class TransactionEditViewModel : ViewModel() {
         val lastUsed = Graph.store.lastAccountId?.takeIf { id -> accounts.any { it.id == id } }
         val defaultAccountId = lastUsed ?: accounts.firstOrNull()?.id ?: ""
 
-        val firstCategory = _state.value.availableCategories.firstOrNull()?.let { parent ->
-            parent.subCategories.firstOrNull()?.id ?: parent.id
-        } ?: "0"
+        // 只能选二级分类：默认选中上一次记账用过的二级分类，没有记录时取第一个二级分类
+        val subCategories = _state.value.availableCategories.flatMap { it.subCategories }
+        val availableCategoryIds = subCategories.map { it.id }.toSet()
+        val lastCategory = Graph.store.lastCategoryId?.takeIf { it in availableCategoryIds }
+        val defaultCategoryId = lastCategory ?: subCategories.firstOrNull()?.id ?: "0"
 
         _state.update {
             it.copy(
                 sourceAccountId = defaultAccountId,
-                categoryId = firstCategory,
+                categoryId = defaultCategoryId,
                 time = System.currentTimeMillis() / 1000,
                 utcOffset = Dates.currentUtcOffsetMinutes()
             )
@@ -209,12 +211,13 @@ class TransactionEditViewModel : ViewModel() {
                 return@update current
             }
 
+            // 一级分类不可选，切换类型时取该类型的第一个二级分类
             val firstCategory = when (type) {
                 TX_TYPE_EXPENSE, TX_TYPE_INCOME -> {
-                    val list = current.copy(type = type).availableCategories
-                    list.firstOrNull()?.let { parent ->
-                        parent.subCategories.firstOrNull()?.id ?: parent.id
-                    } ?: "0"
+                    current.copy(type = type).availableCategories
+                        .flatMap { it.subCategories }
+                        .firstOrNull()
+                        ?.id ?: "0"
                 }
 
                 else -> "0"
@@ -339,8 +342,11 @@ class TransactionEditViewModel : ViewModel() {
             _state.update { it.copy(saving = true, error = null) }
             try {
                 Graph.repo.save(request, current.isNew)
-                // 记住这次用的账户，下次记账默认选中它
+                // 记住这次用的账户与分类，下次记账默认选中它们
                 Graph.store.lastAccountId = current.sourceAccountId
+                if (current.type != TX_TYPE_BALANCE && current.categoryId != "0") {
+                    Graph.store.lastCategoryId = current.categoryId
+                }
                 _state.update { it.copy(saving = false, finished = true) }
             } catch (e: Exception) {
                 _state.update { it.copy(saving = false, error = describeError(e)) }

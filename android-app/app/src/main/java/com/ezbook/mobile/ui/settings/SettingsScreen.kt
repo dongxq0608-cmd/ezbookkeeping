@@ -62,6 +62,9 @@ fun SettingsScreen(
     var serverVersion by remember { mutableStateOf<String?>(null) }
     var loggingOut by remember { mutableStateOf(false) }
     var collapseAccountCategories by remember { mutableStateOf(Graph.store.collapseAccountCategories) }
+    var collapseTransactionCategories by remember {
+        mutableStateOf(Graph.store.collapseTransactionCategories)
+    }
 
     LaunchedEffect(Unit) {
         serverVersion = runCatching { Graph.api.serverVersion().version }.getOrNull()
@@ -221,6 +224,38 @@ fun SettingsScreen(
                         onCheckedChange = { checked ->
                             collapseAccountCategories = checked
                             Graph.store.collapseAccountCategories = checked
+                        }
+                    )
+                }
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            collapseTransactionCategories = !collapseTransactionCategories
+                            Graph.store.collapseTransactionCategories = collapseTransactionCategories
+                        }
+                        .padding(vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "记账分类折叠二级分类",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = "开启后记账时只列出一级分类，点击箭头展开二级分类",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = collapseTransactionCategories,
+                        onCheckedChange = { checked ->
+                            collapseTransactionCategories = checked
+                            Graph.store.collapseTransactionCategories = checked
                         }
                     )
                 }

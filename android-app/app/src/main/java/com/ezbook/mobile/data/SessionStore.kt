@@ -47,11 +47,25 @@ class SessionStore(context: Context) {
             prefs.edit().putBoolean(KEY_COLLAPSE_SUB_ACCOUNTS, value).apply()
         }
 
+    /** 记一笔的分类选择是否折叠二级分类（默认折叠） */
+    var collapseTransactionCategories: Boolean
+        get() = prefs.getBoolean(KEY_COLLAPSE_TX_CATEGORIES, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_COLLAPSE_TX_CATEGORIES, value).apply()
+        }
+
     /** 上一次记账使用的账户，用于下次记账默认选中 */
     var lastAccountId: String?
         get() = prefs.getString(KEY_LAST_ACCOUNT, null)
         set(value) {
             prefs.edit().putString(KEY_LAST_ACCOUNT, value).apply()
+        }
+
+    /** 上一次记账使用的分类，用于下次记账默认选中 */
+    var lastCategoryId: String?
+        get() = prefs.getString(KEY_LAST_CATEGORY, null)
+        set(value) {
+            prefs.edit().putString(KEY_LAST_CATEGORY, value).apply()
         }
 
     /** 上次成功调用 tokens/refresh.json 的时间（秒），用于节流「主动续期」 */
@@ -122,7 +136,9 @@ class SessionStore(context: Context) {
         private const val KEY_USER = "user"
         private const val KEY_REFRESHED_AT = "token_refreshed_at"
         private const val KEY_LAST_ACCOUNT = "last_account_id"
+        private const val KEY_LAST_CATEGORY = "last_category_id"
         private const val KEY_COLLAPSE_SUB_ACCOUNTS = "collapse_sub_accounts"
+        private const val KEY_COLLAPSE_TX_CATEGORIES = "collapse_tx_categories"
 
         /**
          * 归一化服务器地址：

@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
@@ -910,11 +912,32 @@ private fun CategorySheet(
     selectedId: String,
     onSelect: (String) -> Unit
 ) {
-    if (categories.isEmpty()) {
+    // 一级分类只作为分组标题，不能直接选中；记账只能选二级分类
+    val groups = categories.filter { it.subCategories.isNotEmpty() }
+
+    if (groups.isEmpty()) {
         Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-            Text("没有可用分类，请先在网页版创建", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                text = if (categories.isEmpty()) {
+                    "没有可用分类，请先在网页版创建"
+                } else {
+                    "没有可选的二级分类，请先在网页版创建"
+                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         return
+    }
+
+    // 二级分类默认折叠（可在「我的 → 记账分类折叠二级分类」关闭）
+    val collapse = Graph.store.collapseTransactionCategories
+    // 当前选中项所在的一级分类默认展开，便于看到当前选择
+    var expandedIds by remember(groups, selectedId) {
+        mutableStateOf(
+            groups.filter { parent -> parent.subCategories.any { it.id == selectedId } }
+                .map { it.id }
+                .toSet()
+        )
     }
 
     LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
@@ -925,31 +948,86 @@ private fun CategorySheet(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
             )
         }
-        categories.forEach { parent ->
+        groups.forEach { parent ->
+            val expanded = !collapse || parent.id in expandedIds
             item(key = "p-${parent.id}") {
-                CategoryOption(
+                CategoryGroupRow(
                     name = parent.name,
                     iconId = parent.icon,
-                    selected = parent.id == selectedId,
                     color = ledgerColorOf(parent.color, typeColor(type)),
-                    indent = false,
-                    onClick = { onSelect(parent.id) }
+                    expanded = expanded,
+                    collapsible = collapse,
+                    onClick = {
+                        expandedIds = if (parent.id in expandedIds) {
+                            expandedIds - parent.id
+                        } else {
+                            expandedIds + parent.id
+                        }
+                    }
                 )
             }
-            parent.subCategories.forEach { child ->
-                item(key = "c-${child.id}") {
-                    CategoryOption(
-                        name = child.name,
-                        iconId = child.icon,
-                        selected = child.id == selectedId,
-                        color = ledgerColorOf(child.color, typeColor(type)),
-                        indent = true,
-                        onClick = { onSelect(child.id) }
-                    )
+            if (expanded) {
+                parent.subCategories.forEach { child ->
+                    item(key = "c-${child.id}") {
+                        CategoryOption(
+                            name = child.name,
+                            iconId = child.icon,
+                            selected = child.id == selectedId,
+                            color = ledgerColorOf(child.color, typeColor(type)),
+                            indent = true,
+                            onClick = { onSelect(child.id) }
+                        )
+                    }
                 }
             }
         }
         item { Spacer(Modifier.height(24.dp)) }
+    }
+}
+
+/** 分类分组标题：一级分类不可选（仅作分组），保留服务端下发的图标，点击可展开 / 收起二级分类 */
+@Composable
+private fun CategoryGroupRow(
+    name: String,
+    iconId: String?,
+    color: Color,
+    expanded: Boolean,
+    collapsible: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (collapsible) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(start = 2.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (collapsible) {
+            Icon(
+                imageVector = if (expanded) {
+                    Icons.Filled.KeyboardArrowDown
+                } else {
+                    Icons.Filled.KeyboardArrowRight
+                },
+                contentDescription = if (expanded) "收起二级分类" else "展开二级分类",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(2.dp))
+        }
+        LedgerIconBadge(
+            iconId = iconId,
+            kind = LedgerIconKind.CATEGORY,
+            color = color,
+            fallbackText = name,
+            size = 30
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = name,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -966,7 +1044,12 @@ private fun CategoryOption(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(start = if (indent) 44.dp else 20.dp, end = 20.dp, top = 10.dp, bottom = 10.dp),
+            .padding(
+                start = if (indent) 44.dp else 20.dp,
+                end = 20.dp,
+                top = 10.dp,
+                bottom = 10.dp
+            ),
         verticalAlignment = Alignment.CenterVertically
     ) {
         LedgerIconBadge(
