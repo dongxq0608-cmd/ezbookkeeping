@@ -13,8 +13,8 @@ android {
         applicationId = "com.ezbook.mobile"
         minSdk = 26
         targetSdk = 35
-        versionCode = 39
-        versionName = "2.0.2"
+        versionCode = 42
+        versionName = "2.0.5"
         vectorDrawables { useSupportLibrary = true }
     }
 
