@@ -99,6 +99,7 @@ import com.ezbook.mobile.ui.components.ledgerColorOf
 import com.ezbook.mobile.ui.components.groupAccounts
 import com.ezbook.mobile.ui.components.typeColor
 import com.ezbook.mobile.ui.theme.LocalLedgerColors
+import com.ezbook.mobile.ui.theme.glassOverlayContainer
 import com.ezbook.mobile.util.AmountCalculator
 import com.ezbook.mobile.util.Dates
 import com.ezbook.mobile.util.Fmt
@@ -162,7 +163,8 @@ fun TransactionEditScreen(
                             }
                             DropdownMenu(
                                 expanded = showCopyMenu,
-                                onDismissRequest = { showCopyMenu = false }
+                                onDismissRequest = { showCopyMenu = false },
+                                containerColor = glassOverlayContainer()
                             ) {
                                 DropdownMenuItem(
                                     text = { Text("复制") },
@@ -403,6 +405,7 @@ fun TransactionEditScreen(
         ModalBottomSheet(
             onDismissRequest = { picker = null },
             sheetState = sheetState,
+            containerColor = glassOverlayContainer(),
             dragHandle = { BottomSheetDefaults.DragHandle() }
         ) {
             when (target) {
@@ -453,6 +456,7 @@ fun TransactionEditScreen(
         ModalBottomSheet(
             onDismissRequest = { showCalculator = false },
             sheetState = calculatorSheetState,
+            containerColor = glassOverlayContainer(),
             dragHandle = { BottomSheetDefaults.DragHandle() }
         ) {
             CalculatorSheet(
@@ -503,6 +507,7 @@ fun TransactionEditScreen(
         )
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
+            containerColor = glassOverlayContainer(),
             title = { Text("选择时间") },
             text = {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -525,6 +530,7 @@ fun TransactionEditScreen(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
+            containerColor = glassOverlayContainer(),
             title = { Text("删除这笔账单？") },
             text = { Text("删除后无法恢复。") },
             confirmButton = {

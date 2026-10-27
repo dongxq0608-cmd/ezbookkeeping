@@ -96,6 +96,7 @@ import com.ezbook.mobile.ui.components.ledgerColorOf
 import com.ezbook.mobile.ui.components.typeColor
 import com.ezbook.mobile.ui.components.typeLabel
 import com.ezbook.mobile.ui.theme.LocalLedgerColors
+import com.ezbook.mobile.ui.theme.glassOverlayContainer
 import com.ezbook.mobile.util.Dates
 import com.ezbook.mobile.util.Fmt
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -451,6 +452,7 @@ actionTarget?.let { target ->
         ModalBottomSheet(
             onDismissRequest = { actionTarget = null },
             sheetState = sheetState,
+            containerColor = glassOverlayContainer(),
             dragHandle = { BottomSheetDefaults.DragHandle() }
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
@@ -1266,6 +1268,7 @@ private fun CategoryFilterSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        containerColor = glassOverlayContainer(),
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {

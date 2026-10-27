@@ -61,6 +61,7 @@ import com.ezbook.mobile.data.model.AuthResponse
 import com.ezbook.mobile.data.remote.ApiException
 import com.ezbook.mobile.util.describeError
 import kotlinx.coroutines.launch
+import com.ezbook.mobile.ui.theme.glassOverlayContainer
 
 @Composable
 fun LoginScreen(
@@ -293,6 +294,7 @@ fun LoginScreen(
                 show2FA = false
                 passcode = ""
             },
+            containerColor = glassOverlayContainer(),
             title = { Text("两步验证") },
             text = {
                 Column {

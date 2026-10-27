@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 
 /**
@@ -137,4 +138,17 @@ fun EzBookTheme(
             content = content
         )
     }
+}
+
+/**
+ * 弹层（底部弹窗 / 对话框 / 下拉菜单）的底色。
+ *
+ * 页面级卡片用半透明是毛玻璃效果，但弹层叠在内容之上，如果也半透明，
+ * 下层界面的文字和按钮会透出来与弹层内容重叠，因此这里用接近不透明的底色。
+ */
+@Composable
+fun glassOverlayContainer(): Color {
+    // 深色主题的 surface 本身是暗色（亮度 < 0.5），浅色主题反之
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    return if (isDark) Color(0xF71A211C) else Color(0xF7F8FAF7)
 }

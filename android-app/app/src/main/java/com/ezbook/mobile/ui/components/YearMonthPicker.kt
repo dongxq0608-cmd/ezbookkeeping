@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import java.time.YearMonth
+import com.ezbook.mobile.ui.theme.glassOverlayContainer
 
 private const val MIN_YEAR = 2000
 private val MAX_YEAR: Int get() = YearMonth.now().year + 1
@@ -55,7 +56,7 @@ fun YearMonthPickerDialog(
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface
+            color = glassOverlayContainer()
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
@@ -105,7 +106,7 @@ fun YearMonthRangeDialog(
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface
+            color = glassOverlayContainer()
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
