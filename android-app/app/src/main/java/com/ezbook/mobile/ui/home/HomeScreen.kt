@@ -64,7 +64,11 @@ fun HomeScreen(
     onCopyTransaction: (String, Boolean) -> Unit,
     onOpenSettings: () -> Unit,
     selected: Int,
-    onSelectTab: (Int) -> Unit
+    onSelectTab: (Int) -> Unit,
+    /** 保存账单后需要定位的明细（id / 时间），账单页滚动定位后回调清空 */
+    focusTxId: String? = null,
+    focusTxTime: Long = 0L,
+    onFocusHandled: () -> Unit = {}
 ) {
     var pendingCategory by remember { mutableStateOf<CategoryFilterRequest?>(null) }
     var pendingAccount by remember { mutableStateOf<AccountFilterRequest?>(null) }
@@ -129,7 +133,10 @@ fun HomeScreen(
                     onPendingCategoryHandled = { pendingCategory = null },
                     pendingAccount = pendingAccount,
                     onPendingAccountHandled = { pendingAccount = null },
-                    resetToken = billsResetToken
+                    resetToken = billsResetToken,
+                    focusTxId = focusTxId,
+                    focusTxTime = focusTxTime,
+                    onFocusHandled = onFocusHandled
                 )
                 TAB_STATS -> StatisticsScreen(
                     onOpenCategoryTransactions = { categoryId, name, categoryType ->

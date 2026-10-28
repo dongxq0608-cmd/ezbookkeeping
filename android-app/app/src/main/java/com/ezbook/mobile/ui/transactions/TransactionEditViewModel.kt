@@ -47,7 +47,10 @@ data class TransactionEditUiState(
     val tags: List<Tag> = emptyList(),
     val editable: Boolean = true,
     val error: String? = null,
-    val finished: Boolean = false
+    val finished: Boolean = false,
+    /** 保存成功后的账单 id 与时间，用于回到账单明细时定位到该笔 */
+    val savedTxId: String? = null,
+    val savedTxTime: Long = 0L
 ) {
     val flatAccounts: List<Account>
         get() = EzBookRepository.flattenAccounts(accountTree)
@@ -341,13 +344,20 @@ class TransactionEditViewModel : ViewModel() {
         viewModelScope.launch {
             _state.update { it.copy(saving = true, error = null) }
             try {
-                Graph.repo.save(request, current.isNew)
+                val saved = Graph.repo.save(request, current.isNew)
                 // 记住这次用的账户与分类，下次记账默认选中它们
                 Graph.store.lastAccountId = current.sourceAccountId
                 if (current.type != TX_TYPE_BALANCE && current.categoryId != "0") {
                     Graph.store.lastCategoryId = current.categoryId
                 }
-                _state.update { it.copy(saving = false, finished = true) }
+                _state.update {
+                    it.copy(
+                        saving = false,
+                        finished = true,
+                        savedTxId = saved?.id ?: request.id,
+                        savedTxTime = saved?.time?.takeIf { t -> t > 0 } ?: current.time
+                    )
+                }
             } catch (e: Exception) {
                 _state.update { it.copy(saving = false, error = describeError(e)) }
             }

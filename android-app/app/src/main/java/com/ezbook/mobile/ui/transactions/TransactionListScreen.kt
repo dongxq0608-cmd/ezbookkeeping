@@ -142,6 +142,10 @@ fun TransactionListScreen(
     onPendingAccountHandled: () -> Unit = {},
     /** 每次从其他 Tab 重新进入账单页时递增，用于清除上一次的过滤条件 */
     resetToken: Int = 0,
+    /** 记账保存后需要定位的明细 id / 时间 */
+    focusTxId: String? = null,
+    focusTxTime: Long = 0L,
+    onFocusHandled: () -> Unit = {},
     viewModel: TransactionListViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -203,6 +207,21 @@ fun TransactionListScreen(
     val selectedGroup = monthStats[selectedDate]
 
     val listState = rememberLazyListState()
+
+    // 记账保存后：让这笔明细进入当前列表窗口，再把它滚动到屏幕第一条
+    LaunchedEffect(focusTxId) {
+        if (focusTxId != null) viewModel.revealTransaction(focusTxTime)
+    }
+    LaunchedEffect(focusTxId, listItems, calendarMode) {
+        val id = focusTxId ?: return@LaunchedEffect
+        // 日历视图下按日期展示，无需定位
+        if (calendarMode) return@LaunchedEffect
+        val index = groups.indexOfTransaction(id)
+        if (index >= 0) {
+            listState.scrollToItem(index)
+            onFocusHandled()
+        }
+    }
     // 滚动到底部附近时自动加载更早的一周
     LaunchedEffect(listState) {
         snapshotFlow {
@@ -1235,6 +1254,24 @@ private fun subtitleOf(
         ?: ""
     val tags = transaction.tags?.joinToString(" ") { "#${it.name}" }.orEmpty()
     return listOf(accountName, tags).filter { it.isNotBlank() }.joinToString(" · ")
+}
+
+/** 计算某条明细在列表中的下标（含月份分隔行与日期头），找不到返回 -1 */
+private fun List<DayGroup>.indexOfTransaction(id: String): Int {
+    var index = 0
+    var lastMonth: YearMonth? = null
+    forEach { group ->
+        val month = YearMonth.from(group.date)
+        if (month != lastMonth) {
+            index++
+            lastMonth = month
+        }
+        index++
+        val offset = group.items.indexOfFirst { it.id == id }
+        if (offset >= 0) return index + offset
+        index += group.items.size
+    }
+    return -1
 }
 
 private fun buildDayGroups(items: List<TransactionItem>): List<DayGroup> {

@@ -7,6 +7,7 @@ import com.ezbook.mobile.data.model.StatisticItem
 import com.ezbook.mobile.data.model.Tag
 import com.ezbook.mobile.data.model.TrendMonth
 import com.ezbook.mobile.data.model.TransactionItem
+import com.ezbook.mobile.data.model.TransactionCreatedResponse
 import com.ezbook.mobile.data.model.TransactionSaveRequest
 import com.ezbook.mobile.data.remote.ApiClient
 
@@ -55,11 +56,13 @@ class EzBookRepository(private val api: ApiClient) {
 
     suspend fun transaction(id: String): TransactionItem = api.transaction(id)
 
-    suspend fun save(request: TransactionSaveRequest, isNew: Boolean) {
-        if (isNew) {
+    /** 保存账单；新增时返回服务端生成的账单信息，用于保存后定位 */
+    suspend fun save(request: TransactionSaveRequest, isNew: Boolean): TransactionCreatedResponse? {
+        return if (isNew) {
             api.createTransaction(request)
         } else {
             api.modifyTransaction(request)
+            TransactionCreatedResponse(id = request.id.orEmpty(), time = request.time)
         }
     }
 

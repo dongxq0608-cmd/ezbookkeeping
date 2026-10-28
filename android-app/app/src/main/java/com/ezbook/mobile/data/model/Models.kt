@@ -189,6 +189,13 @@ data class TransactionSaveRequest(
     val clientSessionId: String? = null
 )
 
+/** 新增账单接口返回的账单信息（只取保存后定位所需的字段） */
+@Serializable
+data class TransactionCreatedResponse(
+    val id: String = "",
+    val time: Long = 0L
+)
+
 @Serializable
 data class IdRequest(
     val id: String

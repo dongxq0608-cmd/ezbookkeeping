@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
+import java.time.temporal.ChronoUnit
 
 data class TransactionListUiState(
     val year: Int = LocalDate.now().year,
@@ -336,6 +337,35 @@ class TransactionListViewModel : ViewModel() {
             } catch (e: Exception) {
                 _state.update { it.copy(loadingMore = false, error = describeError(e)) }
             }
+        }
+    }
+
+    /**
+     * 定位到指定时间的账单：必要时切换到该月，并展开周窗口直到能覆盖该日期。
+     * 只改状态不滚动，滚动由界面根据账单 id 完成。
+     */
+    fun revealTransaction(timeSeconds: Long) {
+        if (timeSeconds <= 0L) return
+        val date = Dates.toLocalDate(timeSeconds, Dates.currentUtcOffsetMinutes())
+        val target = YearMonth.from(date)
+        val current = _state.value
+        val sameMonth = current.year == target.year && current.month == target.monthValue
+
+        // 与 windowStartDay 保持一致：当月锚点取今天，历史月份取月末
+        val today = LocalDate.now()
+        val anchor = if (YearMonth.from(today) == target) today else target.atEndOfMonth()
+        val daysBack = ChronoUnit.DAYS.between(date, anchor).coerceAtLeast(0)
+        val weeks = (daysBack / 7 + 1).toInt().coerceAtLeast(1)
+
+        if (!sameMonth) {
+            pagesLoaded = 0
+            reachedStart = false
+            _state.update {
+                it.copy(year = target.year, month = target.monthValue, weeksLoaded = weeks)
+            }
+            reload(showLoading = false)
+        } else if (weeks > current.weeksLoaded) {
+            _state.update { it.copy(weeksLoaded = weeks) }
         }
     }
 

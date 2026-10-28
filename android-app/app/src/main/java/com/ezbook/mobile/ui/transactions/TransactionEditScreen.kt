@@ -122,8 +122,8 @@ fun TransactionEditScreen(
     copyWithTime: Boolean = false,
     onFinished: () -> Unit,
     onCopy: (String, Boolean) -> Unit = { _, _ -> },
-    /** 保存成功后的回调：默认与关闭一致 */
-    onSaved: () -> Unit = onFinished,
+    /** 保存成功后的回调（参数为账单 id 与时间，用于定位）：默认与关闭一致 */
+    onSaved: (String?, Long) -> Unit = { _, _ -> onFinished() },
     viewModel: TransactionEditViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -135,7 +135,9 @@ fun TransactionEditScreen(
             viewModel.start(txId)
         }
     }
-    LaunchedEffect(state.finished) { if (state.finished) onSaved() }
+    LaunchedEffect(state.finished) {
+        if (state.finished) onSaved(state.savedTxId, state.savedTxTime)
+    }
 
     var picker by remember { mutableStateOf<PickerTarget?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }

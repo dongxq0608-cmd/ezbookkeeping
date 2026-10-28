@@ -20,6 +20,7 @@ import com.ezbook.mobile.data.model.Tag
 import com.ezbook.mobile.data.model.TokenRefreshResponse
 import com.ezbook.mobile.data.model.TransactionItem
 import com.ezbook.mobile.data.model.TransactionPage
+import com.ezbook.mobile.data.model.TransactionCreatedResponse
 import com.ezbook.mobile.data.model.TransactionSaveRequest
 import com.ezbook.mobile.data.model.TwoFactorRequest
 import kotlinx.coroutines.Dispatchers
@@ -506,9 +507,12 @@ class ApiClient(private val store: SessionStore) {
     suspend fun transaction(id: String): TransactionItem =
         decode(callAuthed("GET", "/api/v1/transactions/get.json", mapOf("id" to id)))
 
-    suspend fun createTransaction(request: TransactionSaveRequest) {
+    /** 新增账单，返回服务端生成的账单 id / 时间，用于保存后定位到该笔明细 */
+    suspend fun createTransaction(request: TransactionSaveRequest): TransactionCreatedResponse? {
         val payload = json.encodeToString(TransactionSaveRequest.serializer(), request)
-        ensureSuccess(callAuthed("POST", "/api/v1/transactions/add.json", null, payload))
+        val text = callAuthed("POST", "/api/v1/transactions/add.json", null, payload)
+        ensureSuccess(text)
+        return runCatching { decode<TransactionCreatedResponse>(text) }.getOrNull()
     }
 
     suspend fun modifyTransaction(request: TransactionSaveRequest) {

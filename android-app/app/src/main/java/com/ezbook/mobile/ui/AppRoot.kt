@@ -5,6 +5,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -39,6 +41,9 @@ fun AppRoot() {
 
     // 底部 Tab 选中项提升到这里：记账保存成功后可以直接切到「账单」页
     var selectedTab by rememberSaveable { mutableIntStateOf(TAB_HOME) }
+    // 保存账单后需要定位的明细（id + 时间），交给账单页滚动定位后清空
+    var focusTxId by rememberSaveable { mutableStateOf<String?>(null) }
+    var focusTxTime by rememberSaveable { mutableLongStateOf(0L) }
 
     val startDestination = remember {
         when {
@@ -99,7 +104,10 @@ fun AppRoot() {
                 onCopyTransaction = { id, withTime -> navController.navigate(Routes.copy(id, withTime)) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 selected = selectedTab,
-                onSelectTab = { selectedTab = it }
+                onSelectTab = { selectedTab = it },
+                focusTxId = focusTxId,
+                focusTxTime = focusTxTime,
+                onFocusHandled = { focusTxId = null }
             )
         }
 
@@ -130,8 +138,10 @@ fun AppRoot() {
                     navController.navigate(Routes.copy(sourceId, withTime))
                 },
                 // 保存成功后回到账单明细，而不是首页
-                onSaved = {
+                onSaved = { id, time ->
                     navController.popBackStack()
+                    focusTxId = id
+                    focusTxTime = time
                     selectedTab = TAB_BILLS
                 }
             )
@@ -148,8 +158,10 @@ fun AppRoot() {
                 onCopy = { sourceId, copyWithTime ->
                     navController.navigate(Routes.copy(sourceId, copyWithTime))
                 },
-                onSaved = {
+                onSaved = { id, time ->
                     navController.popBackStack()
+                    focusTxId = id
+                    focusTxTime = time
                     selectedTab = TAB_BILLS
                 }
             )
